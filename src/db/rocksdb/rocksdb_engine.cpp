@@ -38,11 +38,6 @@
 #include "db/db.hpp"
 #include "util/string_helper.hpp"
 #include <iostream>
-extern "C"{
-#include <allocator/allocator.h>
-#include <btree/btree.h>
-#include <scanner/scanner.h>
-}
 
 std::string Kreon_volume_name = "/tmp/data/kreon.dat";
 //std::string Kreon_volume_name= "/tmp/gstyl.dat";
