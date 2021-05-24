@@ -1,6 +1,5 @@
 #-------------------------------------------------------------------------------
 # Copyright (c) 2013-2016, yinqiwen <yinqiwen@gmail.com>
-# Copyright (c) 2013-2016, FORTH-ICS
 # All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
@@ -58,6 +57,12 @@ ROCKSDB_PATH=${LIB_PATH}/rocksdb-${ROCKSDB_VER}
 ROCKSDB_REMOTE_FILE=https://github.com/facebook/rocksdb/archive/v${ROCKSDB_VER}.tar.gz
 ROCKSDB_FILE=${ROCKSDB_PATH}.tar.gz
 ROCKSDB_LIBA=${ROCKSDB_PATH}/librocksdb.a
+
+#Kreon
+KREON_VER=
+KREON_PATH=${LIB_PATH}/kreon
+KREON_REMOTE_FILE=https://github.com/CARV-ICS-FORTH/kreon.git
+KREON_FILE=${KREON_PATH}
 KREON_LIBA=../deps/kreon/build/kreon_lib/libkreon.a ../deps/kreon/build/_deps/log-build/liblog.a
 
 LEVELDB_VER=1.20
@@ -168,7 +173,7 @@ ifeq ($(uname_S),Linux)
 	CXXFLAGS+=-DCORO_ASM
 	CCFLAGS+=-DCORO_ASM
 	LIBS+=-lrt
-	CXXFLAGS+=
+
 else
 	MALLOC=libc
 	CXXFLAGS+=-DCORO_UCONTEXT -D_XOPEN_SOURCE
@@ -246,9 +251,16 @@ else
 ifeq ($(storage_engine), rocksdb)
   STORAGE_ENGINE=$(ROCKSDB_LIBA)
   STORAGE_ENGINE_PATH=$(ROCKSDB_PATH)
-  INCS+=-I${ROCKSDB_PATH}/include -I${ROCKSDB_PATH} -I../deps/kreon/ -I../deps/kreon/kreon_lib/
-  LIBS:= ${ROCKSDB_LIBA} ${SNAPPY_LIBA} ${LIBS} ${KREON_LIBA}
+  INCS+=-I${ROCKSDB_PATH}/include -I${ROCKSDB_PATH}
+  LIBS:= ${ROCKSDB_LIBA} ${SNAPPY_LIBA} ${LIBS}
   CXXFLAGS+=-D__USE_ROCKSDB__ -std=c++11
+else
+ifeq ($(storage_engine), kreon)
+	STORAGE_ENGINE=$(KREON_LIBA)
+  	STORAGE_ENGINE_PATH=$(KREON_PATH)
+  	INCS+=-I../deps/kreon/ -I../deps/kreon/kreon_lib/
+  	LIBS:= ${KREON_LIBA} ${SNAPPY_LIBA} ${LIBS}
+  	CXXFLAGS+=-D__USE_KREON__ -std=c++11
 else
 ifeq ($(storage_engine), wiredtiger)
   STORAGE_ENGINE=$(WIREDTIGER_LIBA)
@@ -265,7 +277,8 @@ ifeq ($(storage_engine), perconaft)
   LIBS:= ${PERCONAFT_LIBA} ${PERCONAFT_LIBA2} ${SNAPPY_LIBA} ${LIBS} -lz -ldl
   CXXFLAGS+=-D__USE_PERCONAFT__
 else
-  $(error Only leveldb/lmdb/rocksdb/perconaft/wiredtiger/forestdb supported as env storage_engine value)
+  $(error Only leveldb/lmdb/rocksdb/perconaft/wiredtiger/forestdb/kreon supported as env storage_engine value)
+endif
 endif
 endif
 endif
@@ -282,9 +295,11 @@ else
 endif
 #
 
+
 #$(CORE_OBJECTS) $(SERVEROBJ) $(TESTOBJ): | $(ZOOKEEPER_PATH) $(STORAGE_ENGINE_PATH)
 
-all: ${PREBUILD}  test server tools
+# all: ${PREBUILD}  test server tools
+all:  test server tools
 
 $(STORAGE_ENGINE_OBJ): $(STORAGE_ENGINE)
 
@@ -297,7 +312,7 @@ $(DIST_LIBA):$(STORAGE_ENGINE_OBJ) $(CORE_OBJECTS)
 lib: $(DEP_LIBS) lua snappy sparsehash $(storage_engine) $(DIST_LIBA)
 
 server: lib $(CORE_OBJECTS) ${SERVEROBJ}
-	${ARDB_LD} -o ardb-server $(SERVEROBJ)  $(CORE_OBJECTS) ${STORAGE_ENGINE_OBJ} $(LIBS)
+	${ARDB_LD} -o ardb-server $(SERVEROBJ) $(CORE_OBJECTS) ${STORAGE_ENGINE_OBJ} $(LIBS)
 
 test: lib ${TESTOBJ} $(CORE_OBJECTS)
 	${ARDB_LD} -o ardb-test ${STORAGE_ENGINE_OBJ} ${TESTOBJ} $(CORE_OBJECTS) $(LIBS)
@@ -346,6 +361,31 @@ ${SNAPPY_FILE}:
 	cd ${LIB_PATH} && \
 	wget -O ${SNAPPY_FILE} ${SNAPPY_REMOTE_FILE} && \
 	echo "<<<<< Done dowloading Snappy"
+	
+#Make Kreon
+CMAKE = cmake3
+.PHONY: kreon
+kreon: $(KREON_LIBA)
+$(KREON_LIBA): $(KREON_PATH)
+	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.c
+	sed -i 's/MAGIC_NUMBER/MAGIC_NUM/g' ../deps/kreon/kreon_lib/allocator/allocator.h
+	echo ">>>>> Building KREON"
+	CC=gcc-10.1.0 && cd ${KREON_PATH} && mkdir build && cd build && ${CMAKE} ..  && $(MAKE) && CC=gcc
+	echo "<<<<< Done building KREON"
+
+$(KREON_PATH): $(KREON_FILE)
+	echo ">>>>> Unpacking KREON" && \
+	cd ${LIB_PATH}
+	#unzip -a ${KREON_FILE} && \
+	#mv kreon-master kreon && \
+
+	echo "<<<<< Done unpacking KREON"
+
+${KREON_FILE}:
+	echo ">>>>> Dowloading KREON" && \
+	cd ${LIB_PATH} && \
+	git clone ${KREON_REMOTE_FILE} && \
+	echo "<<<<< Done dowloading KREON"
 
 .PHONY: lmdb
 lmdb: $(LMDB_LIBA)
@@ -534,7 +574,7 @@ clean_test:
 
 clean_deps:
 	rm -rf $(LMDB_PATH) $(JEMALLOC_PATH) $(SNAPPY_PATH) $(LEVELDB_PATH) \
-		$(ROCKSDB_PATH) $(ZOOKEEPER_PATH)
+		$(ROCKSDB_PATH) $(ZOOKEEPER_PATH) $(KREON_PATH)
 	$(MAKE) -C $(LUA_PATH) clean
 
 noopt:
@@ -551,5 +591,6 @@ dist:clean all
 clean:
 	rm -f  ${CORE_OBJECTS} $(SERVEROBJ) ${STORAGE_ENGINE_ALL_OBJ} ${TESTOBJ} ${REPAIR_TOOL_OBJ} ${DIST_LIBA} ${DIST_LIB} \
 	       ardb-test  ardb-server ardb-repair
+	rm -rf $(KREON_PATH) ${KREON_FILE} $(KREON_PATH)-master
 
 clobber: clean_deps clean
