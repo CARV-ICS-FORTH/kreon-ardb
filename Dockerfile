@@ -27,7 +27,7 @@ RUN git clone https://github.com/yinqiwen/ardb && \
     (cd ardb/deps/kreon/build && scl enable devtoolset-7 -- /bin/bash -c "cmake3 .. && make")
 
 # Patch and build Ardb
-RUN ls -la kreon-ardb && cp -r /root/kreon-ardb/src /root/ardb
+RUN cp -r /root/kreon-ardb/src /root/ardb
 RUN  cd /root/ardb && storage_engine=kreon make server
 
 RUN strip ardb/src/ardb-server
